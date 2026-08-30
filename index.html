@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dev Lab — Photo Theming &amp; Upscale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --dark-0:#0b0a0c;
+    --dark-1:#151317;
+    --dark-2:#201d23;
+    --dark-3:#2c2830;
+    --paper:#efe9e0;
+    --paper-dim:#a39a8f;
+    --safelight:#e8433a;
+    --safelight-dim:#7a2621;
+    --line:#332e35;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--dark-0);color:var(--paper);font-family:'Inter',sans-serif;min-height:100%;}
+  body{
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(232,67,58,0.06), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(120,90,200,0.05), transparent 40%);
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px;}
+
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.16em;
+    color:var(--safelight);text-transform:uppercase;
+  }
+  h1{
+    font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:clamp(32px,5vw,52px);
+    margin:4px 0 8px;letter-spacing:.005em;line-height:0.95;
+  }
+  header p{color:var(--paper-dim);max-width:560px;font-size:14px;line-height:1.6;margin:0;}
+
+  .layout{display:grid;grid-template-columns:1.15fr 0.85fr;gap:22px;}
+  @media (max-width:880px){.layout{grid-template-columns:1fr;}}
+
+  .panel{background:var(--dark-1);border:1px solid var(--line);border-radius:3px;}
+  .panel-label{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.12em;color:var(--paper-dim);
+    text-transform:uppercase;padding:14px 16px 0;
+  }
+
+  /* TRAY / preview */
+  .tray{padding:14px 16px 18px;}
+  .tray-surface{
+    position:relative;aspect-ratio:4/3;background:
+      repeating-linear-gradient(45deg, #131114, #131114 10px, #17151a 10px, #17151a 20px);
+    border:1px solid var(--line);border-radius:2px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .tray-surface.has-image{background:#0a0a0a;}
+  #dropHint{
+    text-align:center;color:var(--paper-dim);font-size:13px;padding:20px;cursor:pointer;
+  }
+  #dropHint strong{color:var(--paper);}
+  canvas{max-width:100%;max-height:100%;display:block;}
+  #previewCanvas{width:100%;height:100%;object-fit:contain;}
+
+  .develop-indicator{
+    position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--safelight);
+    background:rgba(0,0,0,0.55);padding:4px 8px;border-radius:2px;opacity:0;transition:opacity .2s;
+    text-transform:uppercase;
+  }
+  .develop-indicator.active{opacity:1;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--safelight);animation:pulse 1s infinite ease-in-out;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .scanwipe{
+    position:absolute;inset:0;background:linear-gradient(90deg, transparent, rgba(232,67,58,0.35), transparent);
+    width:26%;transform:translateX(-140%);pointer-events:none;
+  }
+  .scanwipe.run{animation:wipe .9s ease-out;}
+  @keyframes wipe{from{transform:translateX(-140%);}to{transform:translateX(480%);}}
+
+  .tray-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  button, .filebtn{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--dark-2);color:var(--paper);border:1px solid var(--line);border-radius:2px;
+    padding:9px 14px;cursor:pointer;transition:background .15s,border-color .15s;
+  }
+  button:hover, .filebtn:hover{background:var(--dark-3);border-color:#463f49;}
+  button.primary{background:var(--safelight-dim);border-color:var(--safelight);color:#ffece9;}
+  button.primary:hover{background:var(--safelight);}
+  button:disabled{opacity:.35;cursor:not-allowed;}
+  input[type=file]{display:none;}
+
+  .meta-readout{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--paper-dim);
+    margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;
+  }
+  .meta-readout span b{color:var(--paper);font-weight:500;}
+
+  /* THEME GRID */
+  .theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px 16px;}
+  .theme-card{
+    border:1px solid var(--line);border-radius:2px;cursor:pointer;overflow:hidden;
+    background:var(--dark-2);transition:border-color .15s,transform .15s;position:relative;
+  }
+  .theme-card:hover{border-color:#5a525d;transform:translateY(-1px);}
+  .theme-card.selected{border-color:var(--safelight);box-shadow:0 0 0 1px var(--safelight);}
+  .swatch{height:52px;display:flex;}
+  .swatch span{flex:1;}
+  .theme-meta{padding:8px 10px 10px;}
+  .theme-meta .tname{font-family:'Big Shoulders Display',sans-serif;font-weight:700;font-size:16px;line-height:1;}
+  .theme-meta .tdesc{font-size:10.5px;color:var(--paper-dim);margin-top:4px;line-height:1.4;}
+
+  /* EXPORT CONTROLS */
+  .controls{padding:14px 16px 18px;}
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;
+    color:var(--paper-dim);text-transform:uppercase;margin-bottom:6px;
+  }
+  select{
+    width:100%;background:var(--dark-2);color:var(--paper);border:1px solid var(--line);
+    border-radius:2px;padding:9px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;
+  }
+  .dpi-note{
+    font-size:11.5px;color:var(--paper-dim);line-height:1.6;margin-top:10px;
+    border-top:1px solid var(--line);padding-top:12px;
+  }
+  .dpi-note b{color:var(--paper);}
+  #exportBtn{width:100%;padding:13px;font-size:12px;margin-top:4px;}
+  #dlLink{display:none;margin-top:10px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;}
+  #dlLink a{color:var(--safelight);}
+
+  footer{
+    margin-top:26px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--paper-dim);
+    line-height:1.7;border-top:1px solid var(--line);padding-top:16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Client-Side Photo Lab — nothing uploaded, nothing leaves your device</div>
+    <h1>DEV LAB</h1>
+    <p>Drop in a photo, pick a theme, and export at real 300&nbsp;DPI, upscaled to the resolution you need for print. Runs entirely in your browser.</p>
+  </header>
+
+  <div class="layout">
+    <div class="panel tray">
+      <div class="panel-label">Tray</div>
+      <div class="tray-surface" id="traySurface">
+        <div id="dropHint">
+          <strong>Drop a photo here</strong><br>or tap to choose a file
+        </div>
+        <canvas id="previewCanvas" style="display:none;"></canvas>
+        <div class="develop-indicator" id="developIndicator"><span class="dot"></span> DEVELOPING</div>
+        <div class="scanwipe" id="scanwipe"></div>
+      </div>
+      <input type="file" id="fileInput" accept="image/*">
+      <div class="tray-actions">
+        <label class="filebtn" for="fileInput">Choose Photo</label>
+        <button id="resetBtn" disabled>Reset</button>
+      </div>
+      <div class="meta-readout" id="metaReadout"></div>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-label">Themes</div>
+        <div class="theme-grid" id="themeGrid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">Export</div>
+        <div class="controls">
+          <div class="field">
+            <label for="sizeSelect">Output size (longest edge)</label>
+            <select id="sizeSelect">
+              <option value="0">Original resolution</option>
+              <option value="3000">3000px — good print quality</option>
+              <option value="4500" selected>4500px — high quality print</option>
+              <option value="6000">6000px — max quality (large canvas prints)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="formatSelect">File format</label>
+            <select id="formatSelect">
+              <option value="png">PNG (lossless, best for print/POD sites)</option>
+              <option value="jpeg">JPEG (smaller file size)</option>
+            </select>
+          </div>
+          <button id="exportBtn" class="primary" disabled>Export at 300 DPI</button>
+          <div id="dlLink"></div>
+          <div class="dpi-note">
+            <b>What "upscale" actually does here:</b> it increases pixel count using
+            a stepped high-quality resample (better than a single stretch) and writes
+            a real <b>300 DPI</b> tag into the file so print tools read it correctly.
+            It does not invent new detail the camera didn't capture — for that you'd
+            need a dedicated super-resolution model. Themes are genuine color/light
+            processing, not a generative re-draw.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Everything happens in-browser via Canvas — your photo is never sent anywhere.
+    See README.md in this repo for how to add your own themes.
+  </footer>
+</div>
+
+<script>
+/* ============================= THEME PRESETS =============================
+   Add new themes here. Each theme:
+   - filter: CSS canvas filter string applied when the source is drawn
+   - overlay: gradient drawn on top with a blend mode ("screen","overlay","multiply","soft-light")
+   - effects: ordered list of extra passes (grain, vignette, bloom, scanlines)
+   Colors in `swatch` are just for the picker UI thumbnail.
+============================================================================ */
+const THEMES = [
+  {
+    id: 'cyberpunk',
+    name: 'Cyberpunk',
+    desc: 'Neon magenta/cyan split, punched contrast, night-city grain.',
+    swatch: ['#ff2bd6', '#0d0221', '#00e5ff'],
+    filter: 'contrast(1.28) saturate(1.65) brightness(0.94) hue-rotate(-6deg)',
+    overlay: { type:'linear', angle:135, stops:[[0,'#ff2bd6'],[0.45,'transparent'],[0.55,'transparent'],[1,'#00e5ff']], blend:'screen', alpha:0.30 },
+    effects: [
+      { type:'vignette', strength:0.55, color:'#050014' },
+      { type:'scanlines', spacing:4, alpha:0.10 },
+      { type:'grain', intensity:0.05 }
+    ]
+  },
+  {
+    id: 'cosmicrainbow',
+    name: 'Cosmic Rainbow Glow',
+    desc: 'Soft conic rainbow wash with a bloom pass for a glowing halo.',
+    swatch: ['#ff5f6d', '#7b2ff7', '#00d4ff'],
+    filter: 'saturate(1.5) contrast(1.05) brightness(1.06)',
+    overlay: { type:'conic', stops:[[0,'#ff5f6d'],[0.2,'#ffd76d'],[0.4,'#6dffb0'],[0.6,'#6dc9ff'],[0.8,'#a56dff'],[1,'#ff5f6d']], blend:'soft-light', alpha:0.28 },
+    effects: [
+      { type:'bloom', blur:22, brightness:1.5, alpha:0.35 },
+      { type:'vignette', strength:0.25, color:'#0a0018' }
+    ]
+  },
+  {
+    id: 'lilithdreamscape',
+    name: 'Dark Lilith Dreamscape',
+    desc: 'Blood-violet shadows, low brightness, heavy fine grain.',
+    swatch: ['#2b0a3d', '#7a0c2e', '#0a0510'],
+    filter: 'contrast(1.32) saturate(0.85) brightness(0.78) sepia(0.14)',
+    overlay: { type:'radial', stops:[[0,'transparent'],[0.55,'transparent'],[1,'#3d0a2b']], blend:'multiply', alpha:0.65 },
+    effects: [
+      { type:'rim', color:'#7a0c2e', alpha:0.25 },
+      { type:'grain', intensity:0.10 },
+      { type:'vignette', strength:0.6, color:'#050008' }
+    ]
+  },
+  {
+    id: 'goldenhour',
+    name: 'Golden Hour Film',
+    desc: 'Warm sepia-lifted highlights, soft film grain.',
+    swatch: ['#f6b352', '#e2703a', '#3a1d0e'],
+    filter: 'contrast(1.1) saturate(1.18) brightness(1.05) sepia(0.16)',
+    overlay: { type:'linear', angle:180, stops:[[0,'#f6b35288'],[1,'transparent']], blend:'overlay', alpha:0.5 },
+    effects: [
+      { type:'grain', intensity:0.06 },
+      { type:'vignette', strength:0.3, color:'#2a1200' }
+    ]
+  },
+  {
+    id: 'vaporwave',
+    name: 'Vaporwave Dusk',
+    desc: 'Pink/blue duotone gradient with retro scanlines.',
+    swatch: ['#ff77e9', '#5ad1ff', '#2b1055'],
+    filter: 'saturate(1.4) contrast(1.1) hue-rotate(8deg)',
+    overlay: { type:'linear', angle:180, stops:[[0,'#ff77e9'],[0.5,'transparent'],[1,'#5ad1ff']], blend:'overlay', alpha:0.35 },
+    effects: [
+      { type:'scanlines', spacing:3, alpha:0.14 },
+      { type:'vignette', strength:0.3, color:'#160a2e' }
+    ]
+  },
+  {
+    id: 'noir',
+    name: 'Noir Silver',
+    desc: 'High-contrast monochrome with deep vignette and heavy grain.',
+    swatch: ['#e8e8e8', '#4a4a4a', '#0a0a0a'],
+    filter: 'grayscale(1) contrast(1.38) brightness(0.96)',
+    overlay: null,
+    effects: [
+      { type:'grain', intensity:0.12 },
+      { type:'vignette', strength:0.65, color:'#000000' }
+    ]
+  },
+  {
+    id: 'clarity',
+    name: 'Clarity',
+    desc: 'No color shift — just a touch brighter with a sharpen pass for a crisp, high-DPI look.',
+    swatch: ['#ffffff', '#cfcfcf', '#8a8a8a'],
+    filter: 'brightness(1.08) contrast(1.03)',
+    overlay: null,
+    effects: [
+      { type:'sharpen', amount:0.35 }
+    ]
+  }
+];
+
+/* ============================= STATE ============================= */
+let sourceImage = null;
+let sourceFileName = 'photo';
+let selectedTheme = THEMES[0];
+
+/* ============================= UI: theme grid ============================= */
+const themeGrid = document.getElementById('themeGrid');
+THEMES.forEach((t, i) => {
+  const card = document.createElement('div');
+  card.className = 'theme-card' + (i === 0 ? ' selected' : '');
+  card.dataset.id = t.id;
+  card.innerHTML = `
+    <div class="swatch">${t.swatch.map(c => `<span style="background:${c}"></span>`).join('')}</div>
+    <div class="theme-meta">
+      <div class="tname">${t.name}</div>
+      <div class="tdesc">${t.desc}</div>
+    </div>`;
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedTheme = t;
+    if (sourceImage) renderPreview(true);
+  });
+  themeGrid.appendChild(card);
+});
+
+/* ============================= File input / drop ============================= */
+const fileInput = document.getElementById('fileInput');
+const traySurface = document.getElementById('traySurface');
+const dropHint = document.getElementById('dropHint');
+const previewCanvas = document.getElementById('previewCanvas');
+const resetBtn = document.getElementById('resetBtn');
+const exportBtn = document.getElementById('exportBtn');
+const metaReadout = document.getElementById('metaReadout');
+
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+dropHint.addEventListener('click', () => fileInput.click());
+traySurface.addEventListener('dragover', e => { e.preventDefault(); traySurface.style.borderColor = '#e8433a'; });
+traySurface.addEventListener('dragleave', () => { traySurface.style.borderColor = ''; });
+traySurface.addEventListener('drop', e => {
+  e.preventDefault(); traySurface.style.borderColor = '';
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file){
+  sourceFileName = (file.name || 'photo').replace(/\.[^.]+$/, '');
+  const img = new Image();
+  img.onload = () => {
+    sourceImage = img;
+    dropHint.style.display = 'none';
+    previewCanvas.style.display = 'block';
+    traySurface.classList.add('has-image');
+    resetBtn.disabled = false;
+    exportBtn.disabled = false;
+    renderPreview(true);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+resetBtn.addEventListener('click', () => {
+  sourceImage = null;
+  dropHint.style.display = 'block';
+  previewCanvas.style.display = 'none';
+  traySurface.classList.remove('has-image');
+  resetBtn.disabled = true;
+  exportBtn.disabled = true;
+  metaReadout.innerHTML = '';
+  fileInput.value = '';
+});
+
+/* ============================= Processing pipeline ============================= */
+function drawOverlay(ctx, w, h, overlay){
+  if (!overlay) return;
+  let grad;
+  if (overlay.type === 'linear'){
+    const rad = overlay.angle * Math.PI/180;
+    const x1 = w/2 - Math.cos(rad)*w/2, y1 = h/2 - Math.sin(rad)*h/2;
+    const x2 = w/2 + Math.cos(rad)*w/2, y2 = h/2 + Math.sin(rad)*h/2;
+    grad = ctx.createLinearGradient(x1,y1,x2,y2);
+  } else if (overlay.type === 'radial'){
+    grad = ctx.createRadialGradient(w/2,h/2,0, w/2,h/2, Math.max(w,h)/1.4);
+  } else if (overlay.type === 'conic' && ctx.createConicGradient){
+    grad = ctx.createConicGradient(0, w/2, h/2);
+  } else {
+    return;
+  }
+  overlay.stops.forEach(([pos,color]) => grad.addColorStop(pos,color));
+  ctx.save();
+  ctx.globalCompositeOperation = overlay.blend || 'overlay';
+  ctx.globalAlpha = overlay.alpha ?? 0.3;
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  ctx.restore();
+}
+
+function applyVignette(ctx, w, h, strength, color){
+  const grad = ctx.createRadialGradient(w/2,h/2, Math.min(w,h)*0.25, w/2,h/2, Math.max(w,h)*0.72);
+  grad.addColorStop(0,'transparent');
+  grad.addColorStop(1,color);
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = strength;
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  ctx.restore();
+}
+
+function applyRim(ctx, w, h, color, alpha){
+  const grad = ctx.createRadialGradient(w/2,h/2, Math.min(w,h)*0.35, w/2,h/2, Math.max(w,h)*0.7);
+  grad.addColorStop(0,'transparent');
+  grad.addColorStop(1,color);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  ctx.restore();
+}
+
+function applyScanlines(ctx, w, h, spacing, alpha){
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#000000';
+  for (let y=0; y<h; y+=spacing*2){
+    ctx.fillRect(0,y,w,spacing);
+  }
+  ctx.restore();
+}
+
+let grainTileCache = null;
+function getGrainTile(){
+  if (grainTileCache) return grainTileCache;
+  const size = 160;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cx = c.getContext('2d');
+  const imgData = cx.createImageData(size,size);
+  for (let i=0;i<imgData.data.length;i+=4){
+    const v = Math.random()*255;
+    imgData.data[i]=v; imgData.data[i+1]=v; imgData.data[i+2]=v; imgData.data[i+3]=255;
+  }
+  cx.putImageData(imgData,0,0);
+  grainTileCache = c;
+  return c;
+}
+
+function applyGrain(ctx, w, h, intensity){
+  const tile = getGrainTile();
+  const pattern = ctx.createPattern(tile, 'repeat');
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.globalAlpha = intensity;
+  ctx.fillStyle = pattern;
+  ctx.fillRect(0,0,w,h);
+  ctx.restore();
+}
+
+// Unsharp mask: blur a copy, then push the original away from that blur to add edge "punch"
+// without touching hue/saturation — this is what gives the crisper, higher-DPI look.
+function applySharpen(ctx, w, h, amount){
+  const original = ctx.getImageData(0, 0, w, h);
+
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  tmp.getContext('2d').putImageData(original, 0, 0);
+
+  const blurCanvas = document.createElement('canvas');
+  blurCanvas.width = w; blurCanvas.height = h;
+  const bctx = blurCanvas.getContext('2d');
+  bctx.filter = 'blur(1.2px)';
+  bctx.drawImage(tmp, 0, 0);
+
+  const blurred = bctx.getImageData(0, 0, w, h);
+  const out = ctx.createImageData(w, h);
+  const o = original.data, b = blurred.data, d = out.data;
+  for (let i = 0; i < o.length; i += 4){
+    d[i]   = clamp255(o[i]   + (o[i]   - b[i])   * amount);
+    d[i+1] = clamp255(o[i+1] + (o[i+1] - b[i+1]) * amount);
+    d[i+2] = clamp255(o[i+2] + (o[i+2] - b[i+2]) * amount);
+    d[i+3] = o[i+3];
+  }
+  ctx.putImageData(out, 0, 0);
+}
+function clamp255(v){ return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+function applyBloom(destCtx, srcCanvas, w, h, blur, brightness, alpha){
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  const tctx = tmp.getContext('2d');
+  tctx.filter = `blur(${blur}px) brightness(${brightness})`;
+  tctx.drawImage(srcCanvas, 0, 0, w, h);
+  destCtx.save();
+  destCtx.globalCompositeOperation = 'screen';
+  destCtx.globalAlpha = alpha;
+  destCtx.drawImage(tmp, 0, 0);
+  destCtx.restore();
+}
+
+// Renders `img` themed by `theme` onto a canvas of size (w,h). Returns the canvas.
+function processImage(img, theme, w, h){
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.filter = theme.filter || 'none';
+  ctx.drawImage(img, 0, 0, w, h);
+  ctx.filter = 'none';
+
+  drawOverlay(ctx, w, h, theme.overlay);
+
+  (theme.effects || []).forEach(fx => {
+    if (fx.type === 'vignette') applyVignette(ctx, w, h, fx.strength, fx.color);
+    else if (fx.type === 'rim') applyRim(ctx, w, h, fx.color, fx.alpha);
+    else if (fx.type === 'scanlines') applyScanlines(ctx, w, h, fx.spacing, fx.alpha);
+    else if (fx.type === 'grain') applyGrain(ctx, w, h, fx.intensity);
+    else if (fx.type === 'bloom') applyBloom(ctx, canvas, w, h, fx.blur, fx.brightness, fx.alpha);
+    else if (fx.type === 'sharpen') applySharpen(ctx, w, h, fx.amount);
+  });
+
+  return canvas;
+}
+
+// Stepped high-quality upscale: repeated max-2x passes instead of one big stretch.
+function upscaleToCanvas(img, targetLongEdge){
+  const srcW = img.naturalWidth, srcH = img.naturalHeight;
+  const longEdge = Math.max(srcW, srcH);
+  let targetW = srcW, targetH = srcH;
+  if (targetLongEdge && targetLongEdge > longEdge){
+    const scale = targetLongEdge / longEdge;
+    targetW = Math.round(srcW * scale);
+    targetH = Math.round(srcH * scale);
+  }
+  let curCanvas = document.createElement('canvas');
+  curCanvas.width = srcW; curCanvas.height = srcH;
+  curCanvas.getContext('2d').drawImage(img,0,0);
+
+  let curW = srcW, curH = srcH;
+  while (curW < targetW || curH < targetH){
+    const nextW = Math.min(targetW, Math.round(curW * 2));
+    const nextH = Math.min(targetH, Math.round(curH * 2));
+    const next = document.createElement('canvas');
+    next.width = nextW; next.height = nextH;
+    const nctx = next.getContext('2d');
+    nctx.imageSmoothingEnabled = true;
+    nctx.imageSmoothingQuality = 'high';
+    nctx.drawImage(curCanvas, 0, 0, nextW, nextH);
+    curCanvas = next; curW = nextW; curH = nextH;
+  }
+  return { canvas: curCanvas, w: targetW, h: targetH };
+}
+
+/* ============================= Preview render ============================= */
+function renderPreview(animate){
+  if (!sourceImage) return;
+  const maxDim = 900;
+  const scale = Math.min(1, maxDim / Math.max(sourceImage.naturalWidth, sourceImage.naturalHeight));
+  const w = Math.round(sourceImage.naturalWidth * scale);
+  const h = Math.round(sourceImage.naturalHeight * scale);
+  const processed = processImage(sourceImage, selectedTheme, w, h);
+
+  previewCanvas.width = w;
+  previewCanvas.height = h;
+  previewCanvas.getContext('2d').drawImage(processed, 0, 0);
+
+  const indicator = document.getElementById('developIndicator');
+  const wipe = document.getElementById('scanwipe');
+  if (animate){
+    indicator.classList.add('active');
+    wipe.classList.remove('run'); void wipe.offsetWidth; wipe.classList.add('run');
+    setTimeout(() => indicator.classList.remove('active'), 900);
+  }
+
+  metaReadout.innerHTML = `
+    <span>Source: <b>${sourceImage.naturalWidth}×${sourceImage.naturalHeight}px</b></span>
+    <span>Theme: <b>${selectedTheme.name}</b></span>`;
+}
+
+/* ============================= DPI metadata writers ============================= */
+// --- CRC32 (standard algorithm, needed for PNG chunk checksums) ---
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++){
+    let c = n;
+    for (let k = 0; k < 8; k++){
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes){
+  let crc = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++){
+    crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Inserts a pHYs chunk (300 DPI, in pixels-per-meter) right after IHDR in a PNG buffer.
+function setPngDpi(arrayBuffer, dpi){
+  const bytes = new Uint8Array(arrayBuffer);
+  const dv = new DataView(arrayBuffer);
+  // find end of IHDR chunk: 8 byte sig + [4 len][4 type][len data][4 crc]
+  const ihdrLen = dv.getUint32(8);
+  const ihdrEnd = 8 + 8 + ihdrLen + 4; // sig + (len+type) + data + crc
+
+  const ppm = Math.round(dpi / 0.0254); // pixels per meter
+  const chunkData = new Uint8Array(9);
+  const cdv = new DataView(chunkData.buffer);
+  cdv.setUint32(0, ppm);       // X pixels per unit
+  cdv.setUint32(4, ppm);       // Y pixels per unit
+  chunkData[8] = 1;            // unit specifier: 1 = meters
+
+  const typeBytes = new TextEncoder().encode('pHYs');
+  const crcInput = new Uint8Array(typeBytes.length + chunkData.length);
+  crcInput.set(typeBytes, 0);
+  crcInput.set(chunkData, typeBytes.length);
+  const crc = crc32(crcInput);
+
+  const chunk = new Uint8Array(4 + 4 + 9 + 4);
+  const chdv = new DataView(chunk.buffer);
+  chdv.setUint32(0, 9);                 // length of data
+  chunk.set(typeBytes, 4);              // 'pHYs'
+  chunk.set(chunkData, 8);              // data
+  chdv.setUint32(17, crc);              // crc
+
+  const out = new Uint8Array(bytes.length + chunk.length);
+  out.set(bytes.subarray(0, ihdrEnd), 0);
+  out.set(chunk, ihdrEnd);
+  out.set(bytes.subarray(ihdrEnd), ihdrEnd + chunk.length);
+  return out.buffer;
+}
+
+// Patches the JFIF APP0 density fields in a JPEG buffer to 300 DPI in place.
+function setJpegDpi(arrayBuffer, dpi){
+  const bytes = new Uint8Array(arrayBuffer);
+  const dv = new DataView(arrayBuffer);
+  if (dv.getUint16(0) !== 0xFFD8) return arrayBuffer; // not a JPEG
+  let offset = 2;
+  while (offset < bytes.length - 4){
+    if (bytes[offset] !== 0xFF) break;
+    const marker = bytes[offset+1];
+    const segLen = dv.getUint16(offset+2);
+    if (marker === 0xE0){ // APP0
+      // check 'JFIF\0'
+      const id = String.fromCharCode(...bytes.subarray(offset+4, offset+9));
+      if (id === 'JFIF\0'){
+        dv.setUint8(offset+9, 1);          // units = 1 (dots per inch)
+        dv.setUint16(offset+10, dpi);      // Xdensity
+        dv.setUint16(offset+12, dpi);      // Ydensity
+      }
+      break;
+    }
+    offset += 2 + segLen;
+  }
+  return arrayBuffer;
+}
+
+/* ============================= Export ============================= */
+exportBtn.addEventListener('click', async () => {
+  if (!sourceImage) return;
+  exportBtn.disabled = true;
+  exportBtn.textContent = 'Processing…';
+
+  await new Promise(r => setTimeout(r, 30)); // let UI repaint
+
+  const targetLongEdge = parseInt(document.getElementById('sizeSelect').value, 10);
+  const format = document.getElementById('formatSelect').value;
+
+  const { canvas: upCanvas, w, h } = upscaleToCanvas(sourceImage, targetLongEdge);
+  const finalCanvas = processImage(upCanvas, selectedTheme, w, h);
+
+  const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+  const quality = format === 'jpeg' ? 0.94 : undefined;
+
+  finalCanvas.toBlob(async (blob) => {
+    const buf = await blob.arrayBuffer();
+    const patched = format === 'jpeg' ? setJpegDpi(buf, 300) : setPngDpi(buf, 300);
+    const outBlob = new Blob([patched], { type: mime });
+    const url = URL.createObjectURL(outBlob);
+    const ext = format === 'jpeg' ? 'jpg' : 'png';
+    const filename = `${sourceFileName}-${selectedTheme.id}-300dpi.${ext}`;
+
+    const dl = document.getElementById('dlLink');
+    dl.style.display = 'block';
+    dl.innerHTML = `✓ ${w}×${h}px · 300 DPI · <a href="${url}" download="${filename}">Download ${filename}</a>`;
+
+    exportBtn.disabled = false;
+    exportBtn.textContent = 'Export at 300 DPI';
+  }, mime, quality);
+});
+</script>
+</body>
+</html>
