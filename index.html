@@ -173,15 +173,6 @@
         <div class="panel-label">Export</div>
         <div class="controls">
           <div class="field">
-            <label for="sizeSelect">Output size (longest edge)</label>
-            <select id="sizeSelect">
-              <option value="0">Original resolution</option>
-              <option value="3000">3000px — good print quality</option>
-              <option value="4500" selected>4500px — high quality print</option>
-              <option value="6000">6000px — max quality (large canvas prints)</option>
-            </select>
-          </div>
-          <div class="field">
             <label for="formatSelect">File format</label>
             <select id="formatSelect">
               <option value="png">PNG (lossless, best for print/POD sites)</option>
@@ -598,7 +589,7 @@ exportBtn.addEventListener('click', async () => {
 
   await new Promise(r => setTimeout(r, 30)); // let UI repaint
 
-  const targetLongEdge = parseInt(document.getElementById('sizeSelect').value, 10);
+  const targetLongEdge = 4500;
   const format = document.getElementById('formatSelect').value;
 
   const { canvas: upCanvas, w, h } = upscaleToCanvas(sourceImage, targetLongEdge);
