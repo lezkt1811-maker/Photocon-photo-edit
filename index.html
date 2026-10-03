@@ -129,8 +129,6 @@
   }
   .dpi-note b{color:var(--paper);}
   #exportBtn{width:100%;padding:13px;font-size:12px;margin-top:4px;}
-  #dlLink{display:none;margin-top:10px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;}
-  #dlLink a{color:var(--safelight);}
 
   footer{
     margin-top:26px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--paper-dim);
@@ -191,7 +189,6 @@
             </select>
           </div>
           <button id="exportBtn" class="primary" disabled>Export at 300 DPI</button>
-          <div id="dlLink"></div>
           <div class="dpi-note">
             <b>What "upscale" actually does here:</b> it increases pixel count using
             a stepped high-quality resample (better than a single stretch) and writes
@@ -618,9 +615,11 @@ exportBtn.addEventListener('click', async () => {
     const ext = format === 'jpeg' ? 'jpg' : 'png';
     const filename = `${sourceFileName}-${selectedTheme.id}-300dpi.${ext}`;
 
-    const dl = document.getElementById('dlLink');
-    dl.style.display = 'block';
-    dl.innerHTML = `✓ ${w}×${h}px · 300 DPI · <a href="${url}" download="${filename}">Download ${filename}</a>`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
 
     exportBtn.disabled = false;
     exportBtn.textContent = 'Export at 300 DPI';
